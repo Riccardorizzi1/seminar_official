@@ -40,6 +40,9 @@ PART_COUNT = 25
 BLOCK = 1024 * 1024
 LOGGER = logging.getLogger("octopus.cloud")
 
+# Original V11 approved chart styling and UI refinements.
+V11_PRESENTATION = '\n# V11 presentation only: existing calculations remain untouched.\n_old_theme_control = theme_control\n\ndef theme_control():\n    _old_theme_control()\n    st.markdown(\'\\n<style>\\n[data-testid="stHeader"] {background: transparent;}\\n[data-testid="stMetric"] {padding: 14px 16px; border: 1px solid color-mix(in srgb,currentColor 14%,transparent); border-radius: 12px; background: color-mix(in srgb,currentColor 4%,transparent);}\\n[data-testid="stMetricLabel"] {white-space: normal;}\\n[data-testid="stMetricValue"] {font-weight: 650; font-variant-numeric: tabular-nums;}\\n[data-testid="stMarkdownContainer"] p {line-height: 1.65; overflow-wrap: break-word;}\\n[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {line-height: 1.45;}\\n[data-testid="stPlotlyChart"] {border: 1px solid color-mix(in srgb,currentColor 13%,transparent); border-radius: 12px; padding: 8px;}\\n[data-testid="stExpander"] details {border-radius: 10px;}\\n</style>\\n\', unsafe_allow_html=True)\n\n_old_green_colour = green_colour\n\ndef green_colour(value):\n    value = _old_green_colour(value)\n    if not isinstance(value, str):\n        return value\n    # Keep numerical scales, semantic warning hues and opacity.\n    if re.fullmatch(r"#[0-9a-fA-F]{6}", value):\n        rgb = [int(value[i:i+2],16)/255 for i in (1,3,5)]\n        h,l,s = colorsys.rgb_to_hls(*rgb)\n        if .24 <= h <= .48 and s >= .18:\n            l = .43 + .19 * l\n            rgb = colorsys.hls_to_rgb(.39,l,min(.50,max(.24,s)))\n            return \'#\' + \'\'.join(f\'{round(x*255):02x}\' for x in rgb)\n    return value\n\n\ndef _neutral_layout(obj):\n    if isinstance(obj, dict):\n        for k,v in list(obj.items()):\n            if k in (\'bgcolor\',\'bordercolor\',\'gridcolor\',\'zerolinecolor\',\'linecolor\',\'tickcolor\'):\n                obj.pop(k,None)\n            elif isinstance(v,(dict,list)):\n                _neutral_layout(v)\n    elif isinstance(obj,list):\n        for v in obj:\n            _neutral_layout(v)\n\n\ndef plot(figure,*args,**kwargs):\n    obj = go.Figure(figure).to_plotly_json()\n    layout = obj.setdefault(\'layout\',{})\n    layout.pop(\'template\',None)\n    visual(obj)\n    inherit_fonts(layout)\n    _neutral_layout(layout)\n    for trace in obj.get(\'data\',[]):\n        inherit_fonts(trace)\n    # Transparent plot surfaces + native active theme for fonts and axes.\n    layout[\'paper_bgcolor\'] = \'rgba(0,0,0,0)\'\n    layout[\'plot_bgcolor\'] = \'rgba(0,0,0,0)\'\n    kwargs[\'theme\'] = \'streamlit\'\n    return st.plotly_chart(go.Figure(obj),*args,**kwargs)\n'
+
 # Exact names and Silver manifest keys from the actual exported path map.
 SILVER = {
     "complete_households": "complete_household_sample.csv",
@@ -248,6 +251,13 @@ def portable_source(source, home, name):
     for start, end, replacement in sorted(edits, reverse=True):
         raw = raw[:start] + replacement + raw[end:]
     out = raw.decode("utf-8")
+    if name == HELPER:
+        # Restore the approved V11 presentation layer on the V13 helper.
+        # No economic or environmental functions are replaced.
+        functions = {n.name for n in ast.parse(out).body if isinstance(n, ast.FunctionDef)}
+        require({"theme_control", "green_colour", "visual", "inherit_fonts", "plot"} <= functions,
+                "V13 visual helper functions are missing.")
+        out += "\n" + V11_PRESENTATION + "\n"
     compile(out, name, "exec")
     return out
 
