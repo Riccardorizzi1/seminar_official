@@ -1,926 +1,384 @@
-"""
-OCTOPUS ENERGY - AGILE ENERGY ANALYTICS
-Dashboard V13 - Streamlit Community Cloud
+"""Octopus Energy V13 — Streamlit Cloud entry point for seminar_official.
 
-Supports compressed household consumption data
-and nested GitHub repository folders.
+Uses the original V13 dashboard and the flat repository export. No changes
+are made to the checked-in Python modules, datasets or scientific checks.
 """
+from __future__ import annotations
 
 import ast
 import gzip
 import hashlib
 import json
+import logging
 import os
 import re
 import runpy
 import shutil
 import sys
 import tempfile
-
 from pathlib import Path, PurePosixPath
 
-# ============================================================
-# 1. NUMERICAL ENVIRONMENT
-# ============================================================
-
-for key in (
-    "OMP_NUM_THREADS",
-    "OPENBLAS_NUM_THREADS",
-    "MKL_NUM_THREADS",
-    "NUMEXPR_NUM_THREADS",
-    "BLIS_NUM_THREADS"
-):
-    os.environ.setdefault(key, "1")
-
-# ============================================================
-# 2. REPOSITORY CONFIGURATION
-# ============================================================
+for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+             "NUMEXPR_NUM_THREADS", "BLIS_NUM_THREADS"):
+    os.environ[name] = "1"
 
 REPO = Path(__file__).resolve().parent
-
 PROJECT = "Octopus Energy Project"
-
-PY_FILES = (
-    "octopus_dashboard_v13.py",
-    "octopus_v13_components.py",
-    "octopus_v13_render.py"
-)
-
+APP = "octopus_dashboard_v13.py"
+HELPER = "octopus_v13_components.py"
+RENDER = "octopus_v13_render.py"
 MANIFEST = "approved_silver_manifest.json"
+CLOUD_MANIFEST = "approved_silver_manifest.cloud.json"
+ANNUAL = "dashboard_analytics.npz"
+MONTHLY = "monthly_household_outcomes.npz"
+MATRIX = "household_consumption_2013.npy"
+MAP = "file_path_map.json"
+PARTS = "household_parts.json"
+N, T = 3955, 17520
+ORIGINAL_SIZE = 554332928
+PART_COUNT = 25
+BLOCK = 1024 * 1024
+LOGGER = logging.getLogger("octopus.cloud")
 
-# ============================================================
-# 3. PORTABLE PATH MANAGEMENT
-# ============================================================
-
-def flat_name(name):
-
-    if (
-        not isinstance(name, str)
-        or not name
-        or name in (".", "..")
-        or any(c in name for c in ("/", "\\", ":"))
-    ):
-
-        raise ValueError(
-            f"Invalid filename: {name!r}"
-        )
-
-    return name
-
-
-def relative_path(value):
-
-    p = PurePosixPath(
-        str(value).replace("\\", "/")
-    )
-
-    if (
-        p.is_absolute()
-        or ".." in p.parts
-        or ":" in str(p)
-        or not p.parts
-    ):
-
-        raise ValueError(
-            f"Invalid relative path: {value}"
-        )
-
-    return Path(*p.parts)
+# Exact names and Silver manifest keys from the actual exported path map.
+SILVER = {
+    "complete_households": "complete_household_sample.csv",
+    "consumer_behaviour": "consumer_behaviour_evidence.csv",
+    "household_matrix": MATRIX,
+    "household_registry": "household_registry.csv",
+    "integrated_market": "electricity_market_2025.csv",
+    "peak_consumption": "peak_consumption_evidence.csv",
+    "social_comparisons": "social_group_comparisons.csv",
+    "source_interval_index": "source_interval_index.npy",
+    "standing_charges": "tariff_standing_charges_2025.csv",
+}
+REQUIRED = {APP, HELPER, RENDER, MANIFEST, ANNUAL, MONTHLY, *SILVER.values()}
 
 
-def locate(repo, name, preferred=None):
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
 
-    """
-    Locate files automatically, including files
-    stored inside repository subfolders.
-    """
 
-    flat_name(name)
-
-    choices = (
-        [repo / ".streamlit" / name]
-        if name == "config.toml"
-        else []
-    )
-
-    if preferred is not None:
-
-        choices.append(
-            preferred / name
-        )
-
-    choices.append(repo / name)
-
-    for path in choices:
-
-        if path.is_file():
-
-            return path
-
-    matches = sorted(
-
-        p for p in repo.rglob(name)
-
-        if p.is_file()
-
-        and ".git" not in p.relative_to(repo).parts
-
-    )
-
-    if len(matches) != 1:
-
-        raise RuntimeError(
-
-            f"Expected one {name}; "
-            f"found {len(matches)}: "
-
-            + ", ".join(
-                str(p.relative_to(repo))
-                for p in matches
-            )
-
-        )
-
-    return matches[0]
+def log(message):
+    print(f"[Octopus V13 Cloud] {message}", flush=True)
 
 
 def read_json(path):
-
-    return json.loads(
-        path.read_text(
-            encoding="utf-8-sig"
-        )
-    )
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
-# ============================================================
-# 4. ADAPT ORIGINAL V13 PYTHON PATHS
-# ============================================================
-
-def portable_source(source, home):
-
-    """
-    Modify local Path.home() expressions without
-    changing the analytical calculations.
-    """
-
-    raw = source.encode("utf-8")
-
-    offsets = [0]
-
-    for line in raw.splitlines(keepends=True):
-
-        offsets.append(
-            offsets[-1] + len(line)
-        )
-
-    edits = []
-
-    for node in ast.walk(ast.parse(source)):
-
-        if (
-            not isinstance(node, ast.Call)
-            or node.args
-            or node.keywords
-        ):
-
-            continue
-
-        fn = ast.unparse(node.func)
-
-        if fn not in (
-            "Path.home",
-            "pathlib.Path.home"
-        ):
-
-            continue
-
-        start = (
-            offsets[node.lineno - 1]
-            + node.col_offset
-        )
-
-        end = (
-            offsets[node.end_lineno - 1]
-            + node.end_col_offset
-        )
-
-        replacement = (
-
-            f"{fn.rsplit('.', 1)[0]}"
-            f"({str(home)!r})"
-
-        ).encode("utf-8")
-
-        edits.append(
-            (start, end, replacement)
-        )
-
-    for start, end, replacement in sorted(
-        edits,
-        reverse=True
-    ):
-
-        raw = (
-            raw[:start]
-            + replacement
-            + raw[end:]
-        )
-
-    result = raw.decode("utf-8")
-
-    compile(
-        result,
-        "<portable V13>",
-        "exec"
-    )
-
-    return result
+def sha_file(path):
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(BLOCK), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
-# ============================================================
-# 5. CONVERT WINDOWS MANIFEST PATHS
-# ============================================================
+def relative_path(value):
+    p = PurePosixPath(str(value).replace("\\", "/"))
+    require(bool(p.parts) and not p.is_absolute() and ".." not in p.parts
+            and ":" not in str(p), "Invalid path in file_path_map.json.")
+    return Path(*p.parts)
 
-def rewrite_paths(value, root):
 
+def existing_file(repo, name):
+    require(Path(name).name == name and not any(c in name for c in "/\\:"),
+            f"Invalid repository filename: {name}")
+    path = repo / name
+    if name == "config.toml" and (repo / ".streamlit/config.toml").is_file():
+        path = repo / ".streamlit/config.toml"
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing repository file: {name}")
+    with path.open("rb") as f:
+        require(not f.read(50).startswith(b"version https://git-lfs.github.com/spec/v1"),
+                f"Unresolved Git LFS pointer: {name}")
+    return path
+
+
+def discover(repo):
+    map_path = existing_file(repo, MAP)
+    meta_path = existing_file(repo, PARTS)
+    mapping = read_json(map_path)
+    meta = read_json(meta_path)
+    require(mapping.get("dashboard_version") == "V13", "Expected V13 export.")
+    entries = mapping["files"]
+    require(REQUIRED <= set(entries),
+            "Missing path-map entries: " + ", ".join(sorted(REQUIRED - set(entries))))
+    require(all(mapping["silver_manifest_keys"].get(k) == v for k, v in SILVER.items()),
+            "Silver file mapping differs from the V13 export.")
+    require(meta.get("original_filename") == MATRIX and meta.get("compression") == "gzip",
+            "household_parts.json does not describe the original household matrix.")
+    require(meta.get("parts") == [f"household_consumption_part_{i:03d}.gz" for i in range(1, PART_COUNT + 1)],
+            "The expected 25 household parts are missing or out of order.")
+    require(meta.get("original_size") == ORIGINAL_SIZE,
+            "Unexpected original household matrix byte size.")
+    require(isinstance(meta.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", meta["sha256"]),
+            "Invalid household checksum.")
+    # The uncompressed matrix must never be required in the repository.
+    assets = {name: existing_file(repo, name) for name in sorted(REQUIRED - {MATRIX})}
+    parts = [existing_file(repo, name) for name in meta["parts"]]
+    paths = {name: relative_path(entries[name]) for name in REQUIRED}
+    require(len(set(paths.values())) == len(paths), "Duplicate destinations in path map.")
+    require(paths[APP] == Path("dashboard") / APP and
+            paths[HELPER] == Path("dashboard") / HELPER and
+            paths[RENDER] == Path("dashboard") / RENDER and
+            paths[MANIFEST] == Path("data/silver") / MANIFEST and
+            paths[ANNUAL] == Path("data/gold/step_3_dashboard_v3") / ANNUAL and
+            paths[MONTHLY] == Path("data/gold/step_3_justice_v6") / MONTHLY,
+            "Unexpected V13 source or Gold destination in path map.")
+    return paths, meta, assets, parts, [map_path, meta_path, *assets.values(), *parts]
+
+
+def original_manifest(assets):
+    import numpy as np
+    with np.load(assets[ANNUAL], allow_pickle=False) as a, np.load(assets[MONTHLY], allow_pickle=False) as m:
+        expected = str(a["manifest_digest"].item())
+        require(expected == str(m["manifest_digest"].item()),
+                "Annual and monthly Gold use different Silver manifests.")
+        require(sha_file(assets[ANNUAL]) == str(m["annual_gold_digest"].item()),
+                "Annual Gold checksum differs from the one recorded in monthly Gold.")
+    # Only accept a byte representation with the exact archived SHA256.
+    # Git may normalize CRLF to LF. BOM and final newline variants are tested
+    # without changing any JSON data, and only the cryptographic match is used.
+    raw = assets[MANIFEST].read_bytes()
+    lf = raw.replace(b"\r\n", b"\n")
+    candidates = [raw]
+    for base in (lf, lf.removeprefix(b"\xef\xbb\xbf")):
+        for end in (base, base.rstrip(b"\n"), base.rstrip(b"\n") + b"\n"):
+            for bom in (end, b"\xef\xbb\xbf" + end.removeprefix(b"\xef\xbb\xbf")):
+                candidates.extend((bom, bom.replace(b"\n", b"\r\n")))
+    for b in dict.fromkeys(candidates):
+        if hashlib.sha256(b).hexdigest() == expected:
+            manifest = json.loads(b.decode("utf-8-sig"))
+            require(manifest.get("status") == "PASS" and manifest.get("silver_frozen") is True
+                    and manifest.get("ready_for_step_3") is True,
+                    "Silver manifest is not approved.")
+            log("Original Silver SHA256 and annual/monthly Gold SHA256: PASS")
+            return b, manifest
+    raise ValueError("Silver SHA256 differs from both Gold archives. Restore the original approved_silver_manifest.json without editing its contents.")
+
+
+def restore_matrix(meta, parts, target):
+    import numpy as np
+    require(shutil.disk_usage(target.parent).free > meta["original_size"] + 32 * BLOCK,
+            "Not enough temporary disk space for the household matrix.")
+    h = hashlib.sha256()
+    written = 0
+    temp = target.with_suffix(".npy.tmp")
+    try:
+        with temp.open("wb") as out:
+            for i, part in enumerate(parts, 1):
+                with gzip.open(part, "rb") as src:
+                    for block in iter(lambda: src.read(BLOCK), b""):
+                        written += len(block)
+                        require(written <= meta["original_size"], "Household data exceeds original size.")
+                        h.update(block)
+                        out.write(block)
+                if i % 5 == 0:
+                    log(f"Household decompression: {i}/{PART_COUNT} parts")
+        require(written == meta["original_size"] and h.hexdigest() == meta["sha256"],
+                "Household matrix SHA256 or byte size mismatch.")
+        os.replace(temp, target)
+        matrix = np.load(target, mmap_mode="r", allow_pickle=False)
+        require(matrix.shape == (N, T) and matrix.dtype.kind == "f" and matrix.dtype.itemsize == 8,
+                "Unexpected household matrix shape or dtype.")
+        del matrix
+        log("Household matrix: SHA256, shape and dtype PASS (memory mapped)")
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def relocate(value, root):
     if isinstance(value, dict):
-
-        return {
-
-            k: rewrite_paths(v, root)
-
-            for k, v in value.items()
-
-        }
-
+        return {k: relocate(v, root) for k, v in value.items()}
     if isinstance(value, list):
-
-        return [
-
-            rewrite_paths(v, root)
-
-            for v in value
-
-        ]
-
+        return [relocate(v, root) for v in value]
     if isinstance(value, str):
-
         normal = value.replace("\\", "/")
-
         marker = PROJECT + "/"
-
-        pos = normal.lower().find(
-            marker.lower()
-        )
-
+        pos = normal.lower().find(marker.lower())
         if pos >= 0:
-
-            tail = normal[
-                pos + len(marker):
-            ]
-
-            return (
-
-                str(root / relative_path(tail))
-
-                if tail
-
-                else str(root)
-
-            )
-
+            tail = normal[pos + len(marker):]
+            return str(root / relative_path(tail)) if tail else str(root)
     return value
 
 
-# ============================================================
-# 6. MEMORY-EFFICIENT DATA ACCESS
-# ============================================================
-
-def check_lfs(path):
-
-    with path.open("rb") as f:
-
-        if f.read(50).startswith(
-
-            b"version https://git-lfs.github.com/spec/v1"
-
-        ):
-
-            raise ValueError(
-
-                f"Git LFS content not downloaded: "
-                f"{path.name}"
-
-            )
-
-
-def link_data(source, target):
-
-    check_lfs(source)
-
-    try:
-
-        target.symlink_to(source)
-
-    except OSError:
-
-        try:
-
-            os.link(source, target)
-
-        except OSError:
-
-            shutil.copy2(source, target)
-
-
-# ============================================================
-# 7. DISCOVER ALL REQUIRED REPOSITORY FILES
-# ============================================================
-
-def discover(repo):
-
-    map_path = locate(
-        repo,
-        "file_path_map.json"
-    )
-
-    mapping = read_json(map_path)
-
-    if mapping.get("dashboard_version") != "V13":
-
-        raise ValueError(
-            "The export must contain dashboard V13."
-        )
-
-    entries = mapping["files"]
-
-    matrix = mapping[
-        "silver_manifest_keys"
-    ]["household_matrix"]
-
-    flat_name(matrix)
-
-    for name in (*PY_FILES, MANIFEST, matrix):
-
-        if name not in entries:
-
-            raise ValueError(
-                f"Missing entry in path map: {name}"
-            )
-
-    # --------------------------------------------------------
-    # The original household NPY file is no longer
-    # required inside the GitHub repository.
-    # --------------------------------------------------------
-
-    meta_path = locate(
-        repo,
-        "household_parts.json"
-    )
-
-    meta = read_json(meta_path)
-
-    if (
-
-        meta.get("original_filename") != matrix
-
-        or meta.get("compression") != "gzip"
-
-    ):
-
-        raise ValueError(
-
-            "Household compression manifest does "
-            "not match the V13 matrix."
-
-        )
-
-    parts = meta["parts"]
-
-    if (
-
-        not isinstance(parts, list)
-
-        or not parts
-
-        or len(set(parts)) != len(parts)
-
-    ):
-
-        raise ValueError(
-            "Invalid household parts list."
-        )
-
-    if any(
-
-        not re.fullmatch(
-
-            r"household_consumption_part_\d+\.gz",
-
-            flat_name(n)
-
-        )
-
-        for n in parts
-
-    ):
-
-        raise ValueError(
-            "Unexpected household part filename."
-        )
-
-    if (
-
-        not isinstance(
-            meta.get("original_size"),
-            int
-        )
-
-        or meta["original_size"] <= 0
-
-    ):
-
-        raise ValueError(
-            "Invalid household original size."
-        )
-
-    if not re.fullmatch(
-
-        r"[0-9a-f]{64}",
-
-        meta.get("sha256", "")
-
-    ):
-
-        raise ValueError(
-            "Invalid household SHA256 checksum."
-        )
-
-    # Automatically locate all compressed files.
-
-    part_paths = [
-
-        locate(
-            repo,
-            name,
-            meta_path.parent
-        )
-
-        for name in parts
-
-    ]
-
-    # Locate all other dashboard assets.
-    # Explicitly exclude the original household matrix.
-
-    assets = {
-
-        name: locate(
-            repo,
-            name,
-            map_path.parent
-        )
-
-        for name in entries
-
-        if name != matrix
-
-    }
-
-    return (
-
-        mapping,
-        matrix,
-        meta,
-        part_paths,
-        assets,
-        map_path,
-        meta_path
-
-    )
-
-
-# ============================================================
-# 8. RECONSTRUCT HOUSEHOLD CONSUMPTION
-# ============================================================
-
-def restore_household(meta, parts, target):
-
+def portable_source(source, home, name):
+    """Keep the ORIGINAL manifest at MANIFEST. Redirect only operational reads.
+
+    This leaves both original SHA256 calculations in V13 untouched.
+    The helper's explicit manifest path must point to the operational copy too.
     """
-    Reconstruct the original NPY file by streaming
-    the compressed parts directly to disk.
-
-    The complete matrix is never assembled in RAM
-    during decompression.
-    """
-
-    digest = hashlib.sha256()
-
-    written = 0
-
-    temporary = target.with_name(
-
-        target.name + ".tmp"
-
-    )
-
-    try:
-
-        with temporary.open("wb") as out:
-
-            # The correct sequence is specified
-            # in household_parts.json.
-
-            for path in parts:
-
-                check_lfs(path)
-
-                with gzip.open(path, "rb") as src:
-
-                    while True:
-
-                        block = src.read(
-                            1024 * 1024
-                        )
-
-                        if not block:
-
-                            break
-
-                        written += len(block)
-
-                        if written > meta["original_size"]:
-
-                            raise ValueError(
-
-                                "Household data exceeds "
-                                "expected size."
-
-                            )
-
-                        digest.update(block)
-
-                        out.write(block)
-
-        # Verify the exact original file size.
-
-        if written != meta["original_size"]:
-
-            raise ValueError(
-
-                "Household reconstruction "
-                "size mismatch."
-
-            )
-
-        # Verify the original SHA256 checksum.
-
-        if digest.hexdigest() != meta["sha256"]:
-
-            raise ValueError(
-
-                "Household reconstruction "
-                "SHA256 mismatch."
-
-            )
-
-        # Only accept a completely verified file.
-
-        os.replace(
-            temporary,
-            target
-        )
-
-    finally:
-
-        temporary.unlink(
-            missing_ok=True
-        )
+    tree = ast.parse(source)
+    raw = source.encode("utf-8")
+    offsets = [0]
+    for line in raw.splitlines(keepends=True):
+        offsets.append(offsets[-1] + len(line))
+    edits = []
+    counts = {"home": 0, "read": 0, "helper": 0, "digest": 0}
+    for n in ast.walk(tree):
+        replacement = None
+        if isinstance(n, ast.Call):
+            fn = ast.unparse(n.func)
+            if fn in ("Path.home", "pathlib.Path.home") and not n.args and not n.keywords:
+                replacement = f"{fn.rsplit('.', 1)[0]}({str(home)!r})"
+                counts["home"] += 1
+            elif name == APP and fn == "MANIFEST.read_text":
+                # Preserve the read_text arguments, e.g. encoding='utf-8-sig'.
+                n = n.func
+                replacement = f"MANIFEST.with_name({CLOUD_MANIFEST!r}).read_text"
+                counts["read"] += 1
+            elif name == APP and fn == "MANIFEST.read_bytes":
+                counts["digest"] += 1
+        elif name == HELPER and isinstance(n, ast.Constant) and n.value == "data/silver/approved_silver_manifest.json":
+            replacement = repr("data/silver/" + CLOUD_MANIFEST)
+            counts["helper"] += 1
+        if replacement is not None:
+            start = offsets[n.lineno - 1] + n.col_offset
+            end = offsets[n.end_lineno - 1] + n.end_col_offset
+            edits.append((start, end, replacement.encode("utf-8")))
+    if name == APP:
+        require(counts["read"] == 1 and counts["digest"] == 2,
+                f"Unexpected V13 manifest access pattern: {counts}")
+    if name == HELPER:
+        require(counts["helper"] == 1 and counts["home"] >= 1,
+                f"Unexpected V13 helper paths: {counts}")
+    for start, end, replacement in sorted(edits, reverse=True):
+        raw = raw[:start] + replacement + raw[end:]
+    out = raw.decode("utf-8")
+    compile(out, name, "exec")
+    return out
 
 
-# ============================================================
-# 9. PREPARE STREAMLIT CLOUD ENVIRONMENT
-# ============================================================
+def preflight(assets, matrix_path):
+    """Validate Gold arrays and reconcile monthly results before rendering."""
+    import numpy as np
+    import pandas as pd
+    registry = pd.read_csv(assets[SILVER["household_registry"]],
+                           usecols=["household_id", "matrix_row"]).sort_values("matrix_row")
+    ids = registry["household_id"].astype(str).to_numpy()
+    require(len(ids) == N and len(set(ids)) == N and
+            np.array_equal(registry["matrix_row"].to_numpy(), np.arange(N)),
+            "Invalid household registry mapping.")
+    market = pd.read_csv(assets[SILVER["integrated_market"]], usecols=[
+        "target_interval_index", "source_interval_index",
+        "agile_unit_rate_p_kwh_inc_vat", "conventional_unit_rate_p_kwh_inc_vat"
+    ]).sort_values("target_interval_index")
+    idx = market["source_interval_index"].to_numpy(dtype=int)
+    require(len(market) == T and np.array_equal(market["target_interval_index"], np.arange(T))
+            and np.array_equal(np.sort(idx), np.arange(T)), "Invalid market interval mapping.")
+    source_index = np.load(assets[SILVER["source_interval_index"]], allow_pickle=False)
+    require(np.array_equal(source_index, idx), "Silver source index and market mapping differ.")
+    standing = pd.read_csv(assets[SILVER["standing_charges"]])
+    require(len(standing) == 365, "Unexpected number of standing charge days.")
+    pa = market["agile_unit_rate_p_kwh_inc_vat"].to_numpy(float) / 100
+    pc = market["conventional_unit_rate_p_kwh_inc_vat"].to_numpy(float) / 100
+    sa = float(standing["agile_standing_p_day_inc_vat"].sum()) / 100
+    sc = float(standing["conventional_standing_p_day_inc_vat"].sum()) / 100
+    with np.load(assets[ANNUAL], allow_pickle=False) as a, np.load(assets[MONTHLY], allow_pickle=False) as m:
+        require(np.array_equal(a["household_ids"], ids) and np.array_equal(m["household_ids"], ids),
+                "Silver, annual Gold and monthly Gold household ordering differs.")
+        require(int(a["market_intervals"].item()) == T, "Gold market interval count differs.")
+        cols = a["baseline_columns"].tolist()
+        base = a["baseline_values"]
+        require(base.shape == (N, len(cols)) and len(set(cols)) == len(cols), "Invalid Gold baseline dimensions.")
+        for col in ("annual_kwh", "agile_bill", "conventional_bill", "emissions_kg"):
+            require(col in cols, f"Missing baseline column: {col}")
+        agile = base[:, cols.index("agile_bill")]
+        conv = base[:, cols.index("conventional_bill")]
+        cost = a["cost_effects"]
+        carbon = a["carbon_effects"]
+        energy = a["shiftable_energy"]
+        require(cost.shape == carbon.shape == (3, 3, N) and energy.shape == (N,),
+                "Invalid Gold flexibility dimensions.")
+        for arr in (agile, conv, cost, carbon, energy):
+            require(np.isfinite(arr).all(), "Non-finite Gold outcomes.")
+        ma, mc = m["agile"], m["conventional"]
+        require(ma.shape == (3, N, 12) and mc.shape == (N, 12) and len(m["months"]) == 12,
+                "Invalid monthly Gold dimensions.")
+        require(np.allclose(mc.sum(axis=1), conv, rtol=1e-9, atol=1e-6),
+                "Monthly conventional bills do not reconcile with annual Gold.")
+        for i, fraction in enumerate((0.0, 0.2, 0.4)):
+            require(np.allclose(ma[i].sum(axis=1), agile + fraction * cost[1, 0],
+                                rtol=1e-9, atol=1e-6),
+                    f"Monthly Agile scenario {int(fraction*100)}% does not reconcile with annual Gold.")
+        # Same tariff calculation as the V13's bill verification; read only 3 rows.
+        matrix = np.load(matrix_path, mmap_mode="r", allow_pickle=False)
+        for row in (0, N // 2, N - 1):
+            x = matrix[row, idx]
+            require(np.allclose([np.sum(x*pa)+sa, np.sum(x*pc)+sc],
+                                [agile[row], conv[row]], rtol=1e-9, atol=1e-7),
+                    f"Household bill verification failed for matrix row {row}.")
+        del matrix
+    log("Silver/Gold household IDs, interval mapping, bill samples and monthly 0/20/40 reconciliation: PASS")
+
 
 def prepare(repo_str, snapshot):
-
+    # snapshot participates in Streamlit's cache key.
     repo = Path(repo_str)
-
-    (
-        mapping,
-        matrix,
-        meta,
-        parts,
-        assets,
-        _,
-        _
-
-    ) = discover(repo)
-
-    # Create an isolated temporary environment
-    # on the Streamlit Cloud server.
-
-    holder = tempfile.TemporaryDirectory(
-
-        prefix="octopus_v13_"
-
-    )
-
+    paths, meta, assets, parts, _ = discover(repo)
+    raw, manifest = original_manifest(assets)
+    holder = tempfile.TemporaryDirectory(prefix="octopus_v13_cloud_")
     home = Path(holder.name)
-
     root = home / PROJECT
-
     try:
-
-        targets = {
-
-            n: root / relative_path(p)
-
-            for n, p in mapping["files"].items()
-
-        }
-
-        if len(set(targets.values())) != len(targets):
-
-            raise ValueError(
-
-                "Duplicate original file paths "
-                "in path map."
-
-            )
-
+        targets = {n: root / p for n, p in paths.items()}
         for name, target in targets.items():
-
-            target.parent.mkdir(
-
-                parents=True,
-
-                exist_ok=True
-
-            )
-
-            # ------------------------------------------------
-            # HOUSEHOLD MATRIX
-            # Reconstruct from compressed GitHub files.
-            # ------------------------------------------------
-
-            if name == matrix:
-
-                restore_household(
-
-                    meta,
-
-                    parts,
-
-                    target
-
-                )
-
-                continue
-
-            source = assets[name]
-
-            # ------------------------------------------------
-            # PYTHON DASHBOARD FILES
-            # ------------------------------------------------
-
-            if name in PY_FILES:
-
-                target.write_text(
-
-                    portable_source(
-
-                        source.read_text(
-                            encoding="utf-8-sig"
-                        ),
-
-                        home
-
-                    ),
-
-                    encoding="utf-8"
-
-                )
-
-            # ------------------------------------------------
-            # SILVER MANIFEST
-            # ------------------------------------------------
-
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if name == MATRIX:
+                restore_matrix(meta, parts, target)
+            elif name in (APP, HELPER, RENDER):
+                source = assets[name].read_text(encoding="utf-8-sig")
+                target.write_text(portable_source(source, home, name), encoding="utf-8")
             elif name == MANIFEST:
-
-                manifest = rewrite_paths(
-
-                    read_json(source),
-
-                    root
-
-                )
-
-                for key, filename in mapping[
-                    "silver_manifest_keys"
-                ].items():
-
-                    if filename not in targets:
-
-                        raise ValueError(
-
-                            f"Missing exported "
-                            f"Silver asset: {filename}"
-
-                        )
-
-                    manifest["data_files"][key] = str(
-
-                        targets[filename]
-
-                    )
-
-                target.write_text(
-
-                    json.dumps(
-
-                        manifest,
-
-                        indent=2,
-
-                        ensure_ascii=False
-
-                    ),
-
-                    encoding="utf-8"
-
-                )
-
-            # ------------------------------------------------
-            # REMAINING DATASETS AND CONFIGURATION
-            # ------------------------------------------------
-
+                # Immutable canonical bytes for every original hash check.
+                target.write_bytes(raw)
+                operational = relocate(manifest, root)
+                for key, filename in SILVER.items():
+                    require(key in manifest["data_files"], f"Missing Silver key: {key}")
+                    require(Path(str(manifest["data_files"][key]).replace("\\", "/")).name == filename,
+                            f"Silver original path disagrees with exported filename: {key}")
+                    operational["data_files"][key] = str(targets[filename])
+                target.with_name(CLOUD_MANIFEST).write_text(
+                    json.dumps(operational, ensure_ascii=False, indent=2), encoding="utf-8")
             else:
-
-                link_data(
-
-                    source,
-
-                    target
-
-                )
-
-        return (
-
-            holder,
-
-            targets[PY_FILES[0]]
-
-        )
-
+                # No copies of the large repository assets on Linux.
+                target.symlink_to(assets[name].resolve())
+        preflight(assets, targets[MATRIX])
+        log("Runtime verified. Launching the original V13.")
+        return holder, targets[APP]
     except BaseException:
-
         holder.cleanup()
-
         raise
 
 
-# ============================================================
-# 10. STREAMLIT APPLICATION
-# ============================================================
-
 def main():
-
     import streamlit as st
-
     try:
-
-        (
-            _,
-            _,
-            _,
-            parts,
-            assets,
-            map_path,
-            meta_path
-
-        ) = discover(REPO)
-
-        sources = [
-
-            map_path,
-
-            meta_path,
-
-            *parts,
-
-            *assets.values()
-
-        ]
-
-        snapshot = tuple(
-
-            (
-
-                str(p),
-
-                p.stat().st_size,
-
-                p.stat().st_mtime_ns
-
-            )
-
-            for p in sorted(set(sources))
-
-        )
-
-        # Cache the complete reconstructed environment.
-        # Household data is restored once per cached
-        # environment, not every time filters change.
-
-        cached_prepare = st.cache_resource(
-
-            show_spinner=False
-
-        )(prepare)
-
-        holder, entry = cached_prepare(
-
-            str(REPO),
-
-            snapshot
-
-        )
-
+        _, _, _, _, sources = discover(REPO)
+        snapshot = tuple((str(p), p.stat().st_size, p.stat().st_mtime_ns)
+                         for p in sorted(set(sources)))
+        cached = st.cache_resource(show_spinner=False, max_entries=1)(prepare)
+        holder, entry = cached(str(REPO), snapshot)
     except Exception as exc:
-
-        st.error(
-
-            "Unable to initialise the V13 dashboard."
-
-        )
-
-        st.exception(exc)
-
+        LOGGER.exception("V13 Cloud preflight failed")
+        st.error("V13 Cloud data validation failed. See Manage app logs for the exact failed check.")
         st.stop()
-
         return
-
-    # Make the original V13 components importable.
-
     folder = str(entry.parent)
-
     if folder not in sys.path:
+        sys.path.insert(0, folder)
+    for name in (HELPER, RENDER):
+        module = Path(name).stem
+        old = sys.modules.get(module)
+        if old is not None and Path(getattr(old, "__file__", "")).resolve() != (entry.parent/name).resolve():
+            sys.modules.pop(module, None)
+    # Streamlit still owns widget execution and reruns. No global chdir,
+    # monkeypatch of Path.home, change to source files, or skipped checks.
+    runpy.run_path(str(entry), run_name="__main__")
 
-        sys.path.insert(
-
-            0,
-
-            folder
-
-        )
-
-    for filename in PY_FILES[1:]:
-
-        module = Path(filename).stem
-
-        loaded = sys.modules.get(module)
-
-        if (
-
-            loaded is not None
-
-            and Path(
-
-                getattr(loaded, "__file__", "")
-
-            ).resolve()
-
-            != (entry.parent / filename).resolve()
-
-        ):
-
-            sys.modules.pop(
-
-                module,
-
-                None
-
-            )
-
-    # ========================================================
-    # EXECUTE THE ORIGINAL V13 DASHBOARD
-    # ========================================================
-
-    runpy.run_path(
-
-        str(entry),
-
-        run_name="__main__"
-
-    )
-
-
-# ============================================================
-# APPLICATION ENTRY POINT
-# ============================================================
 
 if __name__ == "__main__":
-
     main()
