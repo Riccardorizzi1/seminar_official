@@ -390,5 +390,156 @@ def main():
     runpy.run_path(str(entry), run_name="__main__")
 
 
+# ============================================================
+# V13 — ORIGINAL APPROVED LIGHT AND DARK THEME
+# ============================================================
+
+def apply_v13_theme():
+
+    import streamlit as st
+    from streamlit import config
+
+    themes = {
+
+        "theme": {
+            "font": "sans serif",
+        },
+
+        # LIGHT MODE
+
+        "theme.light": {
+            "primaryColor": "#226B4A",
+            "backgroundColor": "#E3EFE3",
+            "secondaryBackgroundColor": "#F1F7EE",
+            "textColor": "#17271E",
+            "linkColor": "#185B3C",
+
+            "chartCategoricalColors": [
+                "#26704E",
+                "#649C7C",
+                "#437D69",
+                "#8CBBA1",
+                "#355E50",
+                "#A4C5A9"
+            ],
+
+            "chartSequentialColors": [
+                "#DDEFE0",
+                "#A8D3B4",
+                "#72AD89",
+                "#40835F",
+                "#245A40"
+            ]
+        },
+
+        # DARK MODE
+
+        "theme.dark": {
+            "primaryColor": "#78C79B",
+            "backgroundColor": "#14251E",
+            "secondaryBackgroundColor": "#21382D",
+            "textColor": "#F2F6F2",
+            "linkColor": "#B1E2BF",
+
+            "chartCategoricalColors": [
+                "#A1DEB4",
+                "#59A781",
+                "#D0EAC9",
+                "#77B8A0",
+                "#81A992",
+                "#C2D9AA"
+            ],
+
+            "chartSequentialColors": [
+                "#30543F",
+                "#4E805F",
+                "#7DB18C",
+                "#A7D4AB",
+                "#D0EAC9"
+            ]
+        },
+
+        # LIGHT MODE SIDEBAR
+
+        "theme.light.sidebar": {
+            "backgroundColor": "#153C2E",
+            "secondaryBackgroundColor": "#294E3E",
+            "textColor": "#F2F6F2",
+            "primaryColor": "#90D5A5",
+            "linkColor": "#C2EDB5"
+        },
+
+        # DARK MODE SIDEBAR
+
+        "theme.dark.sidebar": {
+            "backgroundColor": "#102C23",
+            "secondaryBackgroundColor": "#284538",
+            "textColor": "#F2F6F2",
+            "primaryColor": "#90D5A5",
+            "linkColor": "#C2EDB5"
+        }
+
+    }
+
+    # Apply the approved native Streamlit themes directly
+    # from app.py, without requiring a separate config file.
+
+    available = config.get_config_options()
+
+    changed = False
+
+    for section, options in themes.items():
+
+        for name, value in options.items():
+
+            key = f"{section}.{name}"
+
+            # Unsupported chart-specific theme options are
+            # left to the original V13 chart renderer.
+
+            if key not in available:
+
+                if name.startswith("chart"):
+                    continue
+
+                raise RuntimeError(
+                    f"Unsupported Streamlit theme option: {key}"
+                )
+
+            if config.get_option(key) != value:
+
+                config.set_option(key, value)
+
+                changed = True
+
+    # Verify that both approved backgrounds are active.
+
+    assert config.get_option(
+        "theme.light.backgroundColor"
+    ) == "#E3EFE3"
+
+    assert config.get_option(
+        "theme.dark.backgroundColor"
+    ) == "#14251E"
+
+    # Refresh the frontend once when the theme changes.
+    # No repeated reruns when navigating dashboard windows.
+
+    if changed:
+
+        st.rerun()
+
+
+# ============================================================
+# APPLICATION ENTRY POINT
+# ============================================================
+
 if __name__ == "__main__":
+
+    apply_v13_theme()
+
+    # Execute the existing V13 dashboard.
+    # Preserve the original sidebar ON/OFF switch,
+    # charts, filters, typography and analytical functions.
+
     main()
