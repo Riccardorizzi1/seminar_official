@@ -390,305 +390,156 @@ def main():
     runpy.run_path(str(entry), run_name="__main__")
 
 
-    # ========================================================
-    # V13 — FIX LIGHT / DARK ON-OFF SWITCH
-    # ========================================================
+    # ============================================================
+# V13 — ORIGINAL APPROVED LIGHT AND DARK THEME
+# ============================================================
 
-    import importlib
-    import re
+def apply_v13_theme():
 
-    components = importlib.import_module(
-        "octopus_v13_components"
-    )
+    import streamlit as st
+    from streamlit import config
 
-    SWITCH_SCRIPT = r"""
-<script>
-(() => {
+    themes = {
 
-    const btn = document.getElementById("v10-mode");
-    const msg = document.getElementById("v10-mode-msg");
+        "theme": {
+            "font": "sans serif",
+        },
 
-    if (!btn || !msg) return;
+        # LIGHT MODE
 
-    const sleep = ms =>
-        new Promise(resolve => setTimeout(resolve, ms));
+        "theme.light": {
+            "primaryColor": "#226B4A",
+            "backgroundColor": "#E3EFE3",
+            "secondaryBackgroundColor": "#F1F7EE",
+            "textColor": "#17271E",
+            "linkColor": "#185B3C",
 
-    // Locate the actual Streamlit document.
-    // Supports local execution and Cloud embedding.
+            "chartCategoricalColors": [
+                "#26704E",
+                "#649C7C",
+                "#437D69",
+                "#8CBBA1",
+                "#355E50",
+                "#A4C5A9"
+            ],
 
-    function findDocument() {
+            "chartSequentialColors": [
+                "#DDEFE0",
+                "#A8D3B4",
+                "#72AD89",
+                "#40835F",
+                "#245A40"
+            ]
+        },
 
-        let w = window;
+        # DARK MODE
 
-        for (let i = 0; i < 5; i++) {
+        "theme.dark": {
+            "primaryColor": "#78C79B",
+            "backgroundColor": "#14251E",
+            "secondaryBackgroundColor": "#21382D",
+            "textColor": "#F2F6F2",
+            "linkColor": "#B1E2BF",
 
-            try {
+            "chartCategoricalColors": [
+                "#A1DEB4",
+                "#59A781",
+                "#D0EAC9",
+                "#77B8A0",
+                "#81A992",
+                "#C2D9AA"
+            ],
 
-                const d = w.document;
+            "chartSequentialColors": [
+                "#30543F",
+                "#4E805F",
+                "#7DB18C",
+                "#A7D4AB",
+                "#D0EAC9"
+            ]
+        },
 
-                if (
-                    d.querySelector(
-                        '[data-testid="stMainMenuButton"]'
-                    ) ||
-                    d.querySelector("#MainMenu")
-                ) {
-                    return d;
-                }
+        # LIGHT MODE SIDEBAR
 
-                if (w.parent === w) break;
+        "theme.light.sidebar": {
+            "backgroundColor": "#153C2E",
+            "secondaryBackgroundColor": "#294E3E",
+            "textColor": "#F2F6F2",
+            "primaryColor": "#90D5A5",
+            "linkColor": "#C2EDB5"
+        },
 
-                w = w.parent;
+        # DARK MODE SIDEBAR
 
-            } catch (_) {
-                break;
-            }
-
+        "theme.dark.sidebar": {
+            "backgroundColor": "#102C23",
+            "secondaryBackgroundColor": "#284538",
+            "textColor": "#F2F6F2",
+            "primaryColor": "#90D5A5",
+            "linkColor": "#C2EDB5"
         }
 
-        return document;
-
     }
 
-    function getMenu(d) {
+    # Apply the approved native Streamlit themes directly
+    # from app.py, without requiring a separate config file.
 
-        return (
-            d.querySelector(
-                '[data-testid="stMainMenuButton"]'
-            ) ||
-            d.querySelector(
-                'button[aria-label="Main menu"]'
-            ) ||
-            d.querySelector("#MainMenu button")
-        );
+    available = config.get_config_options()
 
-    }
+    changed = False
 
-    function isDark(d) {
+    for section, options in themes.items():
 
-        const selectors = [
-            '[data-testid="stAppViewContainer"]',
-            '[data-testid="stApp"]',
-            '.stApp'
-        ];
+        for name, value in options.items():
 
-        for (const selector of selectors) {
+            key = f"{section}.{name}"
 
-            const element = d.querySelector(selector);
+            # Unsupported chart-specific theme options are
+            # left to the original V13 chart renderer.
 
-            if (!element) continue;
+            if key not in available:
 
-            const background = d.defaultView
-                .getComputedStyle(element)
-                .backgroundColor;
+                if name.startswith("chart"):
+                    continue
 
-            const values = background
-                .match(/[0-9.]+/g);
-
-            if (!values || values.length < 3)
-                continue;
-
-            if (
-                values.length === 4 &&
-                Number(values[3]) < 0.5
-            ) continue;
-
-            const brightness =
-                Number(values[0]) * 0.299 +
-                Number(values[1]) * 0.587 +
-                Number(values[2]) * 0.114;
-
-            return brightness < 128;
-
-        }
-
-        return d.defaultView.matchMedia(
-            "(prefers-color-scheme: dark)"
-        ).matches;
-
-    }
-
-    function refresh() {
-
-        const active = isDark(findDocument());
-
-        btn.textContent = active ? "ON" : "OFF";
-
-        btn.setAttribute(
-            "aria-checked",
-            String(active)
-        );
-
-        btn.style.background = active
-            ? "#26734E"
-            : "#527966";
-
-    }
-
-    async function waitFor(fn, timeout = 5000) {
-
-        const start = Date.now();
-
-        while (Date.now() - start < timeout) {
-
-            const result = fn();
-
-            if (result) return result;
-
-            await sleep(100);
-
-        }
-
-        return null;
-
-    }
-
-    btn.onclick = async () => {
-
-        btn.disabled = true;
-        msg.textContent = "";
-
-        const d = findDocument();
-
-        const target = isDark(d)
-            ? "Light"
-            : "Dark";
-
-        let openedHere = false;
-
-        try {
-
-            const menu = await waitFor(
-                () => getMenu(d)
-            );
-
-            if (!menu) {
-                throw new Error(
-                    "Streamlit menu not found"
-                );
-            }
-
-            // Open the native Streamlit theme menu.
-
-            if (
-                menu.getAttribute("aria-expanded")
-                !== "true"
-            ) {
-
-                menu.click();
-                openedHere = true;
-
-            }
-
-            // Select the real native theme.
-            // Streamlit 1.60 theme selector.
-
-            const item = await waitFor(() =>
-
-                d.querySelector(
-                    '[data-testid="stMainMenuItem-theme-'
-                    + target + '"]'
+                raise RuntimeError(
+                    f"Unsupported Streamlit theme option: {key}"
                 )
 
-            );
+            if config.get_option(key) != value:
 
-            if (!item) {
-                throw new Error(
-                    "Native theme option unavailable"
-                );
-            }
+                config.set_option(key, value)
 
-            item.click();
+                changed = True
 
-            // Confirm the actual rendered appearance.
-            // Do not display ON/OFF without confirmation.
+    # Verify that both approved backgrounds are active.
 
-            const confirmed = await waitFor(
-                () => isDark(d) === (target === "Dark")
-            );
+    assert config.get_option(
+        "theme.light.backgroundColor"
+    ) == "#E3EFE3"
 
-            if (!confirmed) {
-                throw new Error(
-                    "Theme change not confirmed"
-                );
-            }
+    assert config.get_option(
+        "theme.dark.backgroundColor"
+    ) == "#14251E"
 
-        } catch (error) {
+    # Refresh the frontend once when the theme changes.
+    # No repeated reruns when navigating dashboard windows.
 
-            msg.textContent = error.message;
+    if changed:
 
-            console.error(
-                "Octopus V13 theme switch:",
-                error
-            );
+        st.rerun()
 
-        } finally {
 
-            const menu = getMenu(d);
+# ============================================================
+# APPLICATION ENTRY POINT
+# ============================================================
 
-            if (
-                openedHere &&
-                menu &&
-                menu.getAttribute("aria-expanded")
-                === "true"
-            ) {
+if __name__ == "__main__":
 
-                menu.click();
+    apply_v13_theme()
 
-            }
+    # Execute the existing V13 dashboard.
+    # Preserve the original sidebar ON/OFF switch,
+    # charts, filters, typography and analytical functions.
 
-            refresh();
-
-            btn.disabled = false;
-
-        }
-
-    };
-
-    refresh();
-
-    const timer = setInterval(() => {
-
-        if (!btn.isConnected) {
-
-            clearInterval(timer);
-            return;
-
-        }
-
-        refresh();
-
-    }, 500);
-
-})();
-</script>
-"""
-
-    # Replace only the defective switch logic.
-    # Preserve the original button and its appearance.
-
-    components.SWITCH, replacements = re.subn(
-
-        r"<script\b[^>]*>.*?</script>",
-
-        lambda _: SWITCH_SCRIPT,
-
-        components.SWITCH,
-
-        count=1,
-
-        flags=re.DOTALL | re.IGNORECASE
-
-    )
-
-    if replacements != 1:
-
-        raise RuntimeError(
-            "Original V13 theme switch not found."
-        )
-
-    # Execute the original dashboard unchanged.
-
-    runpy.run_path(
-        str(entry),
-        run_name="__main__"
-    )
+    main()
