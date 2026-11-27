@@ -1,0 +1,33 @@
+{
+  "original_filename": "household_consumption_2013.npy",
+  "original_size": 554332928,
+  "sha256": "7a2c9f89036240165789c9b95aeb9f817fa78c620139f837becc607e90f8f10a",
+  "compression": "gzip",
+  "parts": [
+    "household_consumption_part_001.gz",
+    "household_consumption_part_002.gz",
+    "household_consumption_part_003.gz",
+    "household_consumption_part_004.gz",
+    "household_consumption_part_005.gz",
+    "household_consumption_part_006.gz",
+    "household_consumption_part_007.gz",
+    "household_consumption_part_008.gz",
+    "household_consumption_part_009.gz",
+    "household_consumption_part_010.gz",
+    "household_consumption_part_011.gz",
+    "household_consumption_part_012.gz",
+    "household_consumption_part_013.gz",
+    "household_consumption_part_014.gz",
+    "household_consumption_part_015.gz",
+    "household_consumption_part_016.gz",
+    "household_consumption_part_017.gz",
+    "household_consumption_part_018.gz",
+    "household_consumption_part_019.gz",
+    "household_consumption_part_020.gz",
+    "household_consumption_part_021.gz",
+    "household_consumption_part_022.gz",
+    "household_consumption_part_023.gz",
+    "household_consumption_part_024.gz",
+    "household_consumption_part_025.gz"
+  ]
+}

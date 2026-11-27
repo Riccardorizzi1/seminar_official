@@ -1,0 +1,73 @@
+
+[theme]
+font = "sans serif"
+
+[theme.light]
+primaryColor = "#226B4A"
+backgroundColor = "#E3EFE3"
+secondaryBackgroundColor = "#F1F7EE"
+textColor = "#17271E"
+linkColor = "#185B3C"
+
+chartCategoricalColors = [
+    "#26704E",
+    "#649C7C",
+    "#437D69",
+    "#8CBBA1",
+    "#355E50",
+    "#A4C5A9"
+]
+
+chartSequentialColors = [
+    "#DDEFE0",
+    "#A8D3B4",
+    "#72AD89",
+    "#40835F",
+    "#245A40"
+]
+
+[theme.dark]
+primaryColor = "#78C79B"
+backgroundColor = "#14251E"
+secondaryBackgroundColor = "#21382D"
+textColor = "#F2F6F2"
+linkColor = "#B1E2BF"
+
+chartCategoricalColors = [
+    "#A1DEB4",
+    "#59A781",
+    "#D0EAC9",
+    "#77B8A0",
+    "#81A992",
+    "#C2D9AA"
+]
+
+chartSequentialColors = [
+    "#30543F",
+    "#4E805F",
+    "#7DB18C",
+    "#A7D4AB",
+    "#D0EAC9"
+]
+
+[theme.light.sidebar]
+backgroundColor = "#153C2E"
+secondaryBackgroundColor = "#294E3E"
+textColor = "#F2F6F2"
+primaryColor = "#90D5A5"
+linkColor = "#C2EDB5"
+
+[theme.dark.sidebar]
+backgroundColor = "#102C23"
+secondaryBackgroundColor = "#284538"
+textColor = "#F2F6F2"
+primaryColor = "#90D5A5"
+linkColor = "#C2EDB5"
+
+[server]
+headless = true
+address = "127.0.0.1"
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false

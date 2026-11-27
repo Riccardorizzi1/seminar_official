@@ -1,0 +1,10 @@
+dimension,group_a_id,group_b_id,group_a,group_b,group_a_peak_share_pct,group_b_peak_share_pct,difference_pp,source_url,source_page,causal_interpretation
+Time-of-use tariff participation,NO_TOU,TOU,Not on time-of-use tariffs,Self-reported time-of-use tariff users,19.0,11.8,7.2,https://www.ofgem.gov.uk/sites/default/files/2026-11/fanz-stats-report-elec-consumption-peak.pdf,11,False
+Solar panel ownership,NO_SOLAR,SOLAR,No solar panels,Solar panel users,17.8,11.1,6.7,https://www.ofgem.gov.uk/sites/default/files/2026-11/fanz-stats-report-elec-consumption-peak.pdf,11,False
+Electric vehicle ownership,NO_EV,EV,No electric vehicle,Electric vehicle users,18.1,12.1,6.0,https://www.ofgem.gov.uk/sites/default/files/2026-11/fanz-stats-report-elec-consumption-peak.pdf,11,False
+Low-carbon technology,NO_LCT,ANY_LCT,No low-carbon technology,Any low-carbon technology,18.6,13.1,5.5,https://www.ofgem.gov.uk/sites/default/files/2026-11/fanz-stats-report-elec-consumption-peak.pdf,11,False
+Heat pump ownership,NO_HEAT_PUMP,HEAT_PUMP,No heat pump,Heat pump users,17.0,11.8,5.2,https://www.ofgem.gov.uk/sites/default/files/2026-11/fanz-stats-report-elec-consumption-peak.pdf,11,False
+Financial vulnerability,BILL_DIFFICULTY,NO_BILL_DIFFICULTY,Households with bill difficulties,Households without bill difficulties,18.3,15.9,2.4,https://www.ofgem.gov.uk/sites/default/files/2026-11/fanz-stats-report-elec-consumption-peak.pdf,10,False
+Household income,LOW_INCOME,HIGHER_INCOME,Household income below GBP 26000,Household income above GBP 26000,17.9,16.0,1.9,https://www.ofgem.gov.uk/sites/default/files/2026-11/fanz-stats-report-elec-consumption-peak.pdf,10,False
+Geographic deprivation,MOST_DEPRIVED,LEAST_DEPRIVED,Most deprived areas,Least deprived areas,17.7,16.4,1.3,https://www.ofgem.gov.uk/sites/default/files/2026-11/fanz-stats-report-elec-consumption-peak.pdf,10,False
+Housing tenure,RENTER,HOMEOWNER,Renters,Homeowners,17.4,16.4,1.0,https://www.ofgem.gov.uk/sites/default/files/2026-11/fanz-stats-report-elec-consumption-peak.pdf,10,False

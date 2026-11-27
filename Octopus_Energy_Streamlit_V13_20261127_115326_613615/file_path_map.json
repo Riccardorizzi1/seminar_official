@@ -1,0 +1,33 @@
+{
+  "dashboard_version": "V13",
+  "archive_structure": "flat",
+  "files": {
+    "octopus_dashboard_v13.py": "dashboard/octopus_dashboard_v13.py",
+    "octopus_v13_components.py": "dashboard/octopus_v13_components.py",
+    "octopus_v13_render.py": "dashboard/octopus_v13_render.py",
+    "config.toml": "dashboard/v13_runtime/.streamlit/config.toml",
+    "approved_silver_manifest.json": "data/silver/approved_silver_manifest.json",
+    "complete_household_sample.csv": "data/silver/step_2_3/20261124T1250263068Z/complete_household_sample.csv",
+    "consumer_behaviour_evidence.csv": "data/silver/step_2_5/20261124T1258012567Z/consumer_behaviour_evidence.csv",
+    "household_consumption_2013.npy": "data/silver/step_2_3/20261124T1250263068Z/household_consumption_2013.npy",
+    "household_registry.csv": "data/silver/step_2_3/20261124T1250263068Z/household_registry.csv",
+    "electricity_market_2025.csv": "data/silver/step_2_6/20261124T1259851287Z/electricity_market_2025.csv",
+    "peak_consumption_evidence.csv": "data/silver/step_2_5/20261124T1258012567Z/peak_consumption_evidence.csv",
+    "social_group_comparisons.csv": "data/silver/step_2_5/20261124T1258012567Z/social_group_comparisons.csv",
+    "source_interval_index.npy": "data/silver/step_2_4/20261124T125625440833Z/source_interval_index.npy",
+    "tariff_standing_charges_2025.csv": "data/silver/step_2_1/20261124T121620102072Z/tariff_standing_charges_2025.csv",
+    "dashboard_analytics.npz": "data/gold/step_3_dashboard_v3/dashboard_analytics.npz",
+    "monthly_household_outcomes.npz": "data/gold/step_3_justice_v6/monthly_household_outcomes.npz"
+  },
+  "silver_manifest_keys": {
+    "complete_households": "complete_household_sample.csv",
+    "consumer_behaviour": "consumer_behaviour_evidence.csv",
+    "household_matrix": "household_consumption_2013.npy",
+    "household_registry": "household_registry.csv",
+    "integrated_market": "electricity_market_2025.csv",
+    "peak_consumption": "peak_consumption_evidence.csv",
+    "social_comparisons": "social_group_comparisons.csv",
+    "source_interval_index": "source_interval_index.npy",
+    "standing_charges": "tariff_standing_charges_2025.csv"
+  }
+}

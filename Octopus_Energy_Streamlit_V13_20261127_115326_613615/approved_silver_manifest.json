@@ -1,0 +1,49 @@
+{
+  "project": "Octopus Energy Project",
+  "step": "2.6",
+  "run_id": "20261124T1259851287Z",
+  "bronze_run_id": "20261124T121149134394Z",
+  "approved_silver_runs": {
+    "2.1": "20261124T121620102072Z",
+    "2.2": "20261124T124806627111Z",
+    "2.3": "20261124T1250263068Z",
+    "2.4": "20261124T125625440833Z",
+    "2.5": "20261124T1258012567Z"
+  },
+  "market_intervals": 17520,
+  "market_columns": 69,
+  "standing_charge_days": 365,
+  "households": 3955,
+  "complete_households": 881,
+  "household_matrix_shape": [
+    3955,
+    17520
+  ],
+  "household_consumption_readings": 69291600,
+  "social_indicators": 22,
+  "social_comparisons": 9,
+  "quality_checks_passed": 50,
+  "data_files": {
+    "tariff_prices": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_1\\20261124T121620102072Z\\tariff_unit_prices_2025.csv",
+    "standing_charges": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_1\\20261124T121620102072Z\\tariff_standing_charges_2025.csv",
+    "quarterly_rates": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_1\\20261124T121620102072Z\\ofgem_quarterly_rates_2025.csv",
+    "electricity_system": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_2\\20261124T124806627111Z\\electricity_system_2025.csv",
+    "household_matrix": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_3\\20261124T1250263068Z\\household_consumption_2013.npy",
+    "household_registry": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_3\\20261124T1250263068Z\\household_registry.csv",
+    "complete_households": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_3\\20261124T1250263068Z\\complete_household_sample.csv",
+    "household_selection": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_3\\20261124T1250263068Z\\household_selection_audit.csv",
+    "historical_calendar": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_3\\20261124T1250263068Z\\calendar_2013.csv",
+    "calendar_mapping": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_4\\20261124T125625440833Z\\calendar_mapping_2013_2025.csv",
+    "source_interval_index": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_4\\20261124T125625440833Z\\source_interval_index.npy",
+    "consumer_behaviour": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_5\\20261124T1258012567Z\\consumer_behaviour_evidence.csv",
+    "peak_consumption": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_5\\20261124T1258012567Z\\peak_consumption_evidence.csv",
+    "social_comparisons": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_5\\20261124T1258012567Z\\social_group_comparisons.csv",
+    "integrated_market": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_6\\20261124T1259851287Z\\electricity_market_2025.csv"
+  },
+  "data_catalogue": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_6\\20261124T1259851287Z\\silver_data_catalogue.csv",
+  "methodology": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_6\\20261124T1259851287Z\\silver_methodology.json",
+  "output_folder": "C:\\Users\\ricca\\Octopus Energy Project\\data\\silver\\step_2_6\\20261124T1259851287Z",
+  "silver_frozen": true,
+  "ready_for_step_3": true,
+  "status": "PASS"
+}
